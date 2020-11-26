@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<title>codemirror demo</title>
+		<script defer src="index.min.js"></script>
+	</head>
+	<style>
+		@import url(https://cdn.jsdelivr.net/gh/tonsky/FiraCode@4/distr/fira_code.css);
+
+		html {
+			background-color: papayawhip;
+		}
+
+		main {
+			max-width: 600px;
+			border: 1px solid lightgrey;
+			border-radius: 1px;
+		}
+
+		.editor .cm-scroller {
+			background-color: white;
+			font-family: "Fira Code", monospace;
+		}
+
+		@supports (font-variation-settings: normal) {
+			.editor .cm-scroller {
+				font-family: "Fira Code VF", monospace;
+			}
+		}
+	</style>
+	<body>
+		<main class="editor"></main>
+	</body>
+</html>

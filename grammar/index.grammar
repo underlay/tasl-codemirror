@@ -1,0 +1,47 @@
+@top Schema { statement* }
+
+@tokens {
+  space { std.whitespace+ }
+  Comment { "#" ![\n]* }
+  identifier { $[a-z] $[a-zA-Z0-9]* }
+  Unit { "!" }
+  Iri { "<>" }
+  At { "&" }
+  Uri { $[a-z]+ (":" $[a-zA-Z0-9-/_.:#]*)? }
+}
+
+@skip { space | Comment }
+
+delimited<element> { "" | element (";" element)* ";"? }
+
+Literal { "<" Uri ">" }
+
+expression[@isGroup=Expression] {
+  Variable | Optional | Reference | Unit | Iri | Literal | Product | Coproduct
+}
+
+Variable { identifier }
+
+Optional { "?" expression }
+
+Reference { At Uri }
+
+Product { "{" delimited<Component> "}" }
+Component { Uri "->" expression }
+
+Coproduct { "[" delimited<Option> "]" }
+Option { expression ">-" Uri }
+
+statement { Namespace | Type | Class | Edge }
+
+Prefix { identifier }
+
+Namespace { @specialize[@name=namespace]<identifier, "namespace"> Prefix Uri }
+
+TypeName { identifier }
+
+Type { @specialize[@name=type]<identifier, "type"> TypeName expression }
+
+Class { @specialize[@name=class]<identifier, "class"> Uri expression }
+
+Edge { @specialize[@name=edge]<identifier, "edge"> Uri "==/" Uri "/=>" Uri }

@@ -1,0 +1,15 @@
+{
+	"exclude": ["demo/*", "test/*"],
+	"include": ["src/*"],
+	"compilerOptions": {
+		"outDir": "lib",
+		"strict": true,
+		"module": "CommonJS",
+		"target": "ES2020",
+		"sourceMap": true,
+		"declaration": true,
+		"alwaysStrict": true,
+		"moduleResolution": "node",
+		"esModuleInterop": true
+	}
+}
