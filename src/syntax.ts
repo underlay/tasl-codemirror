@@ -38,7 +38,7 @@ export const schemaSyntax = LezerSyntax.define(
 			Literal: "string",
 			"Literal/Uri": "string",
 			"Reference/Uri": "className",
-			At: "operator",
+			Pointer: "operator",
 			Optional: "operator",
 			"{ }": "bracket",
 			"[ ]": "bracket",

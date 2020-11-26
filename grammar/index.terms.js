@@ -9,7 +9,7 @@ export const
   Variable = 10,
   Optional = 11,
   Reference = 12,
-  At = 13,
+  Pointer = 13,
   Unit = 14,
   Iri = 15,
   Literal = 16,

@@ -60,7 +60,7 @@ class ex:cool unit
 class ex:wau {
   ex:bar -> foo ;
   ex:age -> integer ;
-  ex:self -> & ex:wau ;
+  ex:self -> * ex:wau ;
 }
 
 

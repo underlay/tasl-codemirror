@@ -6,7 +6,7 @@
   identifier { $[a-z] $[a-zA-Z0-9]* }
   Unit { "!" }
   Iri { "<>" }
-  At { "&" }
+  Pointer { "*" }
   Uri { $[a-z]+ (":" $[a-zA-Z0-9-/_.:#]*)? }
 }
 
@@ -24,7 +24,7 @@ Variable { identifier }
 
 Optional { "?" expression }
 
-Reference { At Uri }
+Reference { Pointer Uri }
 
 Product { "{" delimited<Component> "}" }
 Component { Uri "->" expression }
