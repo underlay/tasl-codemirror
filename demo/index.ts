@@ -50,7 +50,7 @@ namespace ul http://underlay.org/ns/
 type foo {
   ex:a -> ? uri ;
   ex:b -> string ;
-  -> dateTime ;
+  ex:c -> dateTime ;
 }
 
 edge ex:cool ==/ ex:map /=> ex:wau
