@@ -7,7 +7,7 @@
   Unit { "!" }
   Iri { "<>" }
   Pointer { "*" }
-  Uri { $[a-z]+ (":" $[a-zA-Z0-9-/_.:#]*)? }
+  Uri { $[a-z] $[a-zA-Z0-9]* (":" $[a-zA-Z0-9-/_.:#]*)? }
 }
 
 @skip { space | Comment }

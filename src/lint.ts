@@ -1,7 +1,7 @@
 import { EditorState } from "@codemirror/next/state"
 import { Diagnostic } from "@codemirror/next/lint"
 import { EditorView } from "@codemirror/next/view"
-import { SyntaxNode } from "lezer-tree"
+import { SyntaxNode, TreeCursor } from "lezer-tree"
 
 import { APG, ns } from "@underlay/apg"
 
@@ -10,381 +10,304 @@ import { defaultTypes } from "./stdlib.js"
 const uriPattern = /^[a-z]+:[a-zA-Z0-9-/_.:#]+$/
 const namespacePattern = /[#/]$/
 
+export const errorUnit: APG.Unit = Object.freeze({ type: "unit" })
+
 export interface UpdateProps {
 	state: EditorState
 	schema: APG.Schema
-	prefixes: Map<string, string>
+	namespaces: Record<string, string>
+}
+
+type State = {
+	view: EditorView
+	diagnostics: Diagnostic[]
+	namespaces: Record<string, string | null>
+	backReferences: Map<Diagnostic, string>
+	schema: Record<string, APG.Type>
+	types: Record<string, APG.Type>
 }
 
 export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 	view: EditorView
 ): Diagnostic[] => {
-	const tree = view.state.tree
+	const cursor = view.state.tree.cursor()
+	// printSyntax("", cursor.node)
 
-	const diagnostics: Diagnostic[] = []
+	const state: State = {
+		view: view,
+		diagnostics: [],
+		namespaces: {},
+		backReferences: new Map(),
+		types: { ...defaultTypes },
+		schema: {},
+	}
 
-	const cursor1 = tree.cursor()
-	const prefixes1 = new Map<string, string | null>()
-	const prefixIds = new Map<number, [string, string | null]>()
-	const labelKeys = new Set<string>()
-	const ids = new Map<number, string>()
+	if (cursor.name === "Schema") {
+		cursor.firstChild()
+	} else {
+		onChange({ state: view.state, schema: {}, namespaces: {} })
+		return []
+	}
 
 	do {
-		if (cursor1.type.isError) {
-			const { to, from } = cursor1
-			const message = "Syntax error"
-			diagnostics.push({ from, to, message, severity: "error" })
-		} else if (cursor1.node.name === "Namespace") {
-			const identifier = cursor1.node.getChild("Prefix")
-			const uri = cursor1.node.getChild("Uri")
-			let namespace: null | string = null
+		if (cursor.type.isError) {
+			reportChildErrors(state, cursor)
+		} else if (cursor.type.name === "Namespace") {
+			let namespace: string | null = null
+
+			const uri = cursor.node.getChild("Uri")
 			if (uri !== null) {
 				const { from, to } = uri
-				const value = view.state.doc.sliceString(from, to)
-				if (!uriPattern.test(value)) {
-					const message = "Invalid URI"
-					diagnostics.push({ from, to, message, severity: "error" })
-				} else if (!namespacePattern.test(value)) {
-					const message = "Namespaces must end in / or #"
-					diagnostics.push({ from, to, message, severity: "error" })
-				} else {
-					namespace = value
+				namespace = view.state.doc.sliceString(from, to)
+				if (!uriPattern.test(namespace)) {
+					const message = `Invalid URI: URIs must match ${uriPattern.source}`
+					state.diagnostics.push({ from, to, message, severity: "error" })
+				} else if (!namespacePattern.test(namespace)) {
+					const message = "Invalid namespace: namespaces must end in / or #"
+					state.diagnostics.push({ from, to, message, severity: "error" })
 				}
 			}
 
+			const identifier = cursor.node.getChild("Prefix")
 			if (identifier !== null) {
 				const { from, to } = identifier
 				const prefix = view.state.doc.sliceString(from, to)
-				if (prefixes1.has(prefix)) {
+				if (prefix in state.namespaces) {
 					const message = `Duplicate namespace: ${prefix}`
-					diagnostics.push({ from, to, message, severity: "error" })
+					state.diagnostics.push({ from, to, message, severity: "error" })
 				} else {
-					prefixes1.set(prefix, namespace)
-					prefixIds.set(cursor1.from, [prefix, namespace])
+					state.namespaces[prefix] = namespace
 				}
 			}
-		} else if (cursor1.type.name === "Class") {
-			const node = cursor1.node.getChild("Uri")
+		} else if (cursor.type.name === "Type") {
+			const identifier = cursor.node.getChild("TypeName")
+			const expression = cursor.node.getChild("Expression")
+			const type = expression === null ? errorUnit : getType(state, expression)
+			if (identifier !== null) {
+				const { from, to } = identifier
+				const name = view.state.doc.sliceString(from, to)
+				if (name in state.types) {
+					const message = `Invalid type declaration: type ${name} has already been declared`
+					state.diagnostics.push({ from, to, message, severity: "error" })
+				} else {
+					state.types[name] = type
+				}
+			}
+		} else if (cursor.type.name === "Class") {
+			const node = cursor.node.getChild("Uri")
 			if (node === null) {
 				continue
 			}
 
-			const uri = getURI(view, diagnostics, prefixes1, node)
+			const uri = getURI(state, node)
 			if (uri === null) {
 				continue
 			}
 
-			if (labelKeys.has(uri)) {
+			if (uri in state.schema) {
 				const { from, to } = node
-				const message = `Duplicate label`
-				diagnostics.push({ from, to, message, severity: "error" })
+				const message = `Invalid class declaration: class ${uri} has already been declared`
+				state.diagnostics.push({ from, to, message, severity: "error" })
 			} else {
-				labelKeys.add(uri)
-				ids.set(cursor1.from, uri)
+				const expression = cursor.node.getChild("Expression")
+				state.schema[uri] =
+					expression === null ? errorUnit : getType(state, expression)
 			}
-		} else if (cursor1.type.name === "Edge") {
-			const node = cursor1.node.getChild("Uri")?.nextSibling
-			if (node === undefined || node === null) {
-				continue
-			}
-
-			const uri = getURI(view, diagnostics, prefixes1, node)
-			if (uri === null) {
-				continue
-			}
-
-			if (labelKeys.has(uri)) {
-				const { from, to } = node
-				const message = `Duplicate label`
-				diagnostics.push({ from, to, message, severity: "error" })
-			} else {
-				labelKeys.add(uri)
-				ids.set(cursor1.from, uri)
-			}
-		}
-	} while (cursor1.next())
-
-	const cursor2 = tree.cursor()
-	const prefixes2 = new Map<string, string | null>()
-	const keysArray = Array.from(labelKeys).sort()
-	const keys = new Map(keysArray.map((key, i) => [key, i]))
-	const labels = new Map<string, APG.Type | null>()
-	const types = new Map<string, APG.Type | null>([...defaultTypes])
-
-	if (cursor2.name === "Schema" && cursor2.firstChild()) {
-		do {
-			if (cursor2.type.name === "Namespace") {
-				const entry = prefixIds.get(cursor2.from)
-				if (entry !== undefined) {
-					prefixes2.set(...entry)
-				}
-			} else if (cursor2.type.name === "Type") {
-				const identifier = cursor2.node.getChild("TypeName")
-				const expression = cursor2.node.getChild("Expression")
-				const type =
-					expression &&
-					getType(view, diagnostics, prefixes2, types, keys, expression)
-
-				if (identifier !== null) {
-					const { from, to } = identifier
-					const name = view.state.doc.sliceString(from, to)
-					if (types.has(name)) {
-						const message = `Duplicate identifier: ${name}`
-						diagnostics.push({ from, to, message, severity: "error" })
-					} else {
-						types.set(name, type)
+		} else if (cursor.type.name === "Edge") {
+			const uris = cursor.node.getChildren("Uri")
+			const names = uris.map((uri) => getURI(state, uri))
+			if (uris.length === 3 && names.length === 3) {
+				const [sourceNode, labelNode, targetNode] = uris
+				const [source, label, target] = names
+				if (label in state.schema) {
+					const { from, to } = labelNode
+					const message = `Invalid edge declaration: class ${label} has already been declared`
+					state.diagnostics.push({ from, to, message, severity: "error" })
+				} else {
+					if (!(source in state.schema)) {
+						const message = `Invalid edge declaration: source class ${source} is not defined`
+						const { to, from } = sourceNode
+						const d: Diagnostic = { to, from, message, severity: "error" }
+						state.backReferences.set(d, source)
 					}
-				}
-			} else if (cursor2.type.name === "Class") {
-				const key = ids.get(cursor2.from)
-				const expression = cursor2.node.getChild("Expression")
-				const type =
-					expression &&
-					getType(view, diagnostics, prefixes2, types, keys, expression)
-				if (key !== undefined) {
-					labels.set(key, type)
-				}
-			} else if (cursor2.type.name === "Edge") {
-				const key = ids.get(cursor2.from)
-				const nodes = cursor2.node.getChildren("Uri")
-				if (nodes.length === 3) {
-					const [sourceNode, {}, targetNode] = nodes
-					const source = getType(
-						view,
-						diagnostics,
-						prefixes2,
-						types,
-						keys,
-						sourceNode
-					)
-					const target = getType(
-						view,
-						diagnostics,
-						prefixes2,
-						types,
-						keys,
-						targetNode
-					)
-					if (key !== undefined && source && target) {
-						labels.set(key, {
-							type: "product",
-							components: [
-								{ type: "component", key: ns.source, value: source },
-								{ type: "component", key: ns.target, value: target },
-							],
-						})
+
+					if (!(target in state.schema)) {
+						const message = `Invalid edge declaration: target class ${target} is not defined`
+						const { to, from } = targetNode
+						const d: Diagnostic = { to, from, message, severity: "error" }
+						state.backReferences.set(d, target)
+					}
+
+					state.schema[label] = {
+						type: "product",
+						components: {
+							[ns.source]: { type: "reference", value: source },
+							[ns.target]: { type: "reference", value: target },
+						},
 					}
 				}
 			}
-		} while (cursor2.nextSibling())
-	} else {
-		onChange({ schema: [], prefixes: new Map(), state: view.state })
-	}
-
-	const schema: APG.Schema = keysArray.map((key) => ({
-		type: "label",
-		key,
-		value: labels.get(key) || { type: "unit" },
-	}))
-
-	const prefixes = new Map<string, string>()
-	for (const [key, value] of prefixes1) {
-		if (value !== null) {
-			prefixes.set(key, value)
 		}
-	}
 
-	onChange({ state: view.state, schema, prefixes })
+		reportChildErrors(state, cursor)
+	} while (cursor.nextSibling())
 
-	diagnostics.sort(({ from: a }, { from: b }) => (a < b ? -1 : b < a ? 1 : 0))
+	const namespaces: [string, string][] = Object.entries(
+		state.namespaces
+	).filter(([_, base]) => base !== null) as [string, string][]
 
-	return diagnostics
+	onChange({
+		state: view.state,
+		schema: state.schema,
+		namespaces: Object.fromEntries(namespaces),
+	})
+
+	return state.diagnostics
+		.filter((d) => {
+			const key = state.backReferences.get(d)
+			if (key === undefined) {
+				return true
+			} else if (key in state.schema) {
+				return false
+			} else {
+				return true
+			}
+		})
+		.sort(({ from: a }, { from: b }) => (a < b ? -1 : b < a ? 1 : 0))
 }
 
-function getURI(
-	view: EditorView,
-	diagnostics: Diagnostic[],
-	prefixes: Map<string, string | null>,
-	node: SyntaxNode
-): string | null {
+function getURI(state: State, node: SyntaxNode): string {
 	const { from, to } = node
-	const value = view.state.doc.sliceString(from, to)
+	const value = state.view.state.doc.sliceString(from, to)
 	const index = value.indexOf(":")
 	if (index === -1) {
-		const message = `Invalid URI`
-		diagnostics.push({ from, to, message, severity: "error" })
-		return null
+		const message = `Invalid URI: URIs must be of the form [namespace]:[path]`
+		state.diagnostics.push({ from, to, message, severity: "error" })
+		return value
 	}
 
 	const prefix = value.slice(0, index)
-	if (prefixes.has(prefix)) {
-		const base = prefixes.get(prefix)!
-		return base && base + value.slice(index + 1)
+	if (prefix in state.namespaces) {
+		const namespace = state.namespaces[prefix]
+		return namespace === null ? value : namespace + value.slice(index + 1)
 	}
 
 	const message = `Invalid URI: namespace ${prefix} is not defined`
-	diagnostics.push({ from, to, message, severity: "error" })
-	return null
+	state.diagnostics.push({ from, to, message, severity: "error" })
+	return value
 }
 
 // Variable | Optional | Reference | Unit | Iri | Literal | Product | Coproduct
-function getType(
-	view: EditorView,
-	diagnostics: Diagnostic[],
-	prefixes: Map<string, string | null>,
-	types: Map<string, APG.Type | null>,
-	keys: Map<string, number>,
-	node: SyntaxNode
-): APG.Type | null {
+function getType(state: State, node: SyntaxNode): APG.Type {
 	if (node.name === "Variable") {
 		const { from, to } = node
-		const value = view.state.doc.sliceString(from, to)
-		const type = types.get(value)
-		if (type === undefined) {
-			const message = `Type ${value} is not defined`
-			diagnostics.push({ from, to, message, severity: "error" })
-			return null
+		const value = state.view.state.doc.sliceString(from, to)
+		if (value in state.types) {
+			return state.types[value]
 		} else {
-			return type
+			const message = `Type ${value} is not defined`
+			state.diagnostics.push({ from, to, message, severity: "error" })
+			return errorUnit
 		}
 	} else if (node.name === "Optional") {
 		const expression = node.getChild("Expression")
-		if (expression === null) {
-			return null
-		} else {
-			const type = getType(view, diagnostics, prefixes, types, keys, expression)
-			if (type === null) {
-				return null
-			} else {
-				return {
-					type: "coproduct",
-					options: [
-						{ type: "option", key: ns.none, value: { type: "unit" } },
-						{ type: "option", key: ns.some, value: type },
-					],
-				}
-			}
+		const type: APG.Type =
+			expression === null ? errorUnit : getType(state, expression)
+		return {
+			type: "coproduct",
+			options: { [ns.none]: { type: "unit" }, [ns.some]: type },
 		}
 	} else if (node.name === "Reference") {
 		const uri = node.getChild("Uri")
 		if (uri === null) {
-			return null
+			return errorUnit
 		}
 
-		const key = getURI(view, diagnostics, prefixes, uri)
-		if (key === null) {
-			return null
-		}
-
-		const index = keys.get(key)
-		if (index === undefined) {
+		const key = getURI(state, uri)
+		if (!(key in state.schema)) {
 			const { to, from } = uri
-			const message = `Class not defined`
-			diagnostics.push({ to, from, message, severity: "error" })
-			return null
-		} else {
-			return { type: "reference", value: index }
+			const message = `Reference error: class ${key} is not defined`
+			const d: Diagnostic = { to, from, message, severity: "error" }
+			state.backReferences.set(d, key)
+			state.diagnostics.push(d)
 		}
+
+		return { type: "reference", value: key }
 	} else if (node.name === "Unit") {
 		return { type: "unit" }
 	} else if (node.name === "Iri") {
-		return { type: "iri" }
+		return { type: "uri" }
 	} else if (node.name === "Literal") {
 		const uri = node.getChild("Uri")
 		if (uri === null) {
-			return null
+			return errorUnit
 		}
-
-		const datatype = getURI(view, diagnostics, prefixes, uri)
-		if (datatype === null) {
-			return null
-		}
-
+		const datatype = getURI(state, uri)
 		return { type: "literal", datatype }
 	} else if (node.name === "Product") {
-		const components: APG.Component[] = []
-		const componentKeys = new Set<string>()
+		const components: Record<string, APG.Type> = {}
 		for (const component of node.getChildren("Component")) {
 			const uri = component.getChild("Uri")
 			if (uri === null) {
 				continue
 			}
 
-			const key = getURI(view, diagnostics, prefixes, uri)
-			if (key === null) {
-				continue
-			} else if (componentKeys.has(key)) {
+			const key = getURI(state, uri)
+			if (key in components) {
 				const { to, from } = uri
 				const message = `Duplicate product component key`
-				diagnostics.push({ to, from, message, severity: "error" })
-				continue
+				state.diagnostics.push({ to, from, message, severity: "error" })
 			} else {
-				componentKeys.add(key)
+				const expression = component.getChild("Expression")
+				components[key] =
+					expression === null ? errorUnit : getType(state, expression)
 			}
-
-			const expression = component.getChild("Expression")
-			if (expression === null) {
-				continue
-			}
-
-			const value = getType(
-				view,
-				diagnostics,
-				prefixes,
-				types,
-				keys,
-				expression
-			)
-			if (value === null) {
-				continue
-			}
-
-			components.push({ type: "component", key, value })
 		}
 
 		return { type: "product", components }
 	} else if (node.name === "Coproduct") {
-		const options: APG.Option[] = []
-		const optionKeys = new Set<string>()
+		const options: Record<string, APG.Type> = {}
 		for (const option of node.getChildren("Option")) {
-			const expression = option.getChild("Expression")
-			if (expression === null) {
-				continue
-			}
-
-			const value = getType(
-				view,
-				diagnostics,
-				prefixes,
-				types,
-				keys,
-				expression
-			)
-			if (value === null) {
-				continue
-			}
-
 			const uri = option.getChild("Uri")
 			if (uri === null) {
 				continue
 			}
 
-			const key = getURI(view, diagnostics, prefixes, uri)
-			if (key === null) {
-				continue
-			} else if (optionKeys.has(key)) {
+			const key = getURI(state, uri)
+			if (key in options) {
 				const { to, from } = uri
 				const message = `Duplicate coproduct option key`
-				diagnostics.push({ to, from, message, severity: "error" })
-				continue
+				state.diagnostics.push({ to, from, message, severity: "error" })
 			} else {
-				optionKeys.add(key)
+				const expression = option.getChild("Expression")
+				options[key] =
+					expression === null ? errorUnit : getType(state, expression)
 			}
-
-			options.push({ type: "option", key, value })
 		}
 
 		return { type: "coproduct", options }
+	} else {
+		return { type: "unit" }
 	}
-	return null
+}
+
+// function printSyntax(prefix: string, node: SyntaxNode) {
+// 	console.log(`${prefix}- ${node.type.name} ${node.from} ${node.to}`)
+// 	for (let child = node.firstChild; child !== null; child = child.nextSibling) {
+// 		printSyntax(prefix + "  ", child)
+// 	}
+// }
+
+function reportChildErrors(state: State, cursor: TreeCursor) {
+	if (cursor.type.isError) {
+		const { from, to } = cursor
+		const message = `Syntax error`
+		state.diagnostics.push({ from, to, message, severity: "error" })
+	}
+	if (cursor.firstChild()) {
+		do {
+			reportChildErrors(state, cursor)
+		} while (cursor.nextSibling())
+		cursor.parent()
+	}
 }
