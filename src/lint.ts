@@ -13,6 +13,7 @@ const namespacePattern = /[#/]$/
 export const errorUnit: APG.Unit = Object.freeze({ type: "unit" })
 
 export interface UpdateProps {
+	errors: number
 	state: EditorState
 	schema: APG.Schema
 	namespaces: Record<string, string>
@@ -45,7 +46,7 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 	if (cursor.name === "Schema") {
 		cursor.firstChild()
 	} else {
-		onChange({ state: view.state, schema: {}, namespaces: {} })
+		onChange({ errors: 1, state: view.state, schema: {}, namespaces: {} })
 		return []
 	}
 
@@ -151,12 +152,6 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 		state.namespaces
 	).filter(([_, base]) => base !== null) as [string, string][]
 
-	onChange({
-		state: view.state,
-		schema: state.schema,
-		namespaces: Object.fromEntries(namespaces),
-	})
-
 	const sorted = state.diagnostics
 		.filter((d) => {
 			const key = state.backReferences.get(d)
@@ -171,6 +166,13 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 		.sort(({ from: a, to: c }, { from: b, to: d }) =>
 			a < b ? -1 : b < a ? 1 : c < d ? -1 : d < c ? 1 : 0
 		)
+
+	onChange({
+		errors: sorted.length,
+		state: view.state,
+		schema: state.schema,
+		namespaces: Object.fromEntries(namespaces),
+	})
 
 	return sorted
 }

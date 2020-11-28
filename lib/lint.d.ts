@@ -4,6 +4,7 @@ import { EditorView } from "@codemirror/next/view";
 import { APG } from "@underlay/apg";
 export declare const errorUnit: APG.Unit;
 export interface UpdateProps {
+    errors: number;
     state: EditorState;
     schema: APG.Schema;
     namespaces: Record<string, string>;
