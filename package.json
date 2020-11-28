@@ -19,11 +19,15 @@
 	},
 	"homepage": "https://github.com/underlay/apg-schema-codemirror#readme",
 	"dependencies": {
+		"@babel/preset-env": "^7.12.7",
 		"@underlay/apg": "^0.7.0",
+		"babel-loader": "^8.2.2",
 		"lezer": "^0.12.1",
 		"n3.ts": "^0.2.0"
 	},
 	"devDependencies": {
+		"@babel/cli": "^7.12.8",
+		"@babel/core": "^7.12.9",
 		"@babel/plugin-transform-modules-commonjs": "^7.12.1",
 		"@babel/preset-typescript": "^7.12.7",
 		"@codemirror/next": "^0.14.0",

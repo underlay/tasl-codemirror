@@ -51,7 +51,6 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 
 	do {
 		if (cursor.type.isError) {
-			reportChildErrors(state, cursor)
 		} else if (cursor.type.name === "Namespace") {
 			let namespace: string | null = null
 
@@ -95,23 +94,19 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 			}
 		} else if (cursor.type.name === "Class") {
 			const node = cursor.node.getChild("Uri")
-			if (node === null) {
-				continue
-			}
-
-			const uri = getURI(state, node)
-			if (uri === null) {
-				continue
-			}
-
-			if (uri in state.schema) {
-				const { from, to } = node
-				const message = `Invalid class declaration: class ${uri} has already been declared`
-				state.diagnostics.push({ from, to, message, severity: "error" })
-			} else {
-				const expression = cursor.node.getChild("Expression")
-				state.schema[uri] =
-					expression === null ? errorUnit : getType(state, expression)
+			if (node !== null) {
+				const uri = getURI(state, node)
+				if (uri !== null) {
+					if (uri in state.schema) {
+						const { from, to } = node
+						const message = `Invalid class declaration: class ${uri} has already been declared`
+						state.diagnostics.push({ from, to, message, severity: "error" })
+					} else {
+						const expression = cursor.node.getChild("Expression")
+						state.schema[uri] =
+							expression === null ? errorUnit : getType(state, expression)
+					}
+				}
 			}
 		} else if (cursor.type.name === "Edge") {
 			const uris = cursor.node.getChildren("Uri")
@@ -162,7 +157,7 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 		namespaces: Object.fromEntries(namespaces),
 	})
 
-	return state.diagnostics
+	const sorted = state.diagnostics
 		.filter((d) => {
 			const key = state.backReferences.get(d)
 			if (key === undefined) {
@@ -173,7 +168,11 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 				return true
 			}
 		})
-		.sort(({ from: a }, { from: b }) => (a < b ? -1 : b < a ? 1 : 0))
+		.sort(({ from: a, to: c }, { from: b, to: d }) =>
+			a < b ? -1 : b < a ? 1 : c < d ? -1 : d < c ? 1 : 0
+		)
+
+	return sorted
 }
 
 function getURI(state: State, node: SyntaxNode): string {
@@ -301,7 +300,7 @@ function getType(state: State, node: SyntaxNode): APG.Type {
 function reportChildErrors(state: State, cursor: TreeCursor) {
 	if (cursor.type.isError) {
 		const { from, to } = cursor
-		const message = `Syntax error`
+		const message = `Syntax error: unexpected or missing token (that's all we know)`
 		state.diagnostics.push({ from, to, message, severity: "error" })
 	}
 	if (cursor.firstChild()) {

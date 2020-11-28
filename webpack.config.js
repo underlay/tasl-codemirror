@@ -3,14 +3,14 @@ const path = require("path")
 module.exports = {
 	devtool: "source-map",
 
-	entry: { index: path.resolve(__dirname, "demo", "index.ts") },
+	entry: { index: path.resolve(__dirname, "demo", "index.js") },
 
 	output: {
 		filename: "[name].min.js",
 		path: path.resolve(__dirname, "demo"),
 	},
 
-	resolve: { extensions: [".js", ".ts"] },
+	resolve: { extensions: [".js"] },
 
 	module: {
 		rules: [
@@ -20,9 +20,12 @@ module.exports = {
 				loader: "source-map-loader",
 			},
 			{
-				test: /\.ts$/,
-				exclude: /node_modules\//,
-				loader: "ts-loader",
+				test: /\.js$/,
+				exclude: /(node_modules)\//,
+				loader: "babel-loader",
+				options: {
+					presets: ["@babel/preset-env"],
+				},
 			},
 		],
 	},

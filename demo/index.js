@@ -10,11 +10,11 @@ import {
 	indentLess,
 } from "@codemirror/next/commands"
 import { commentKeymap } from "@codemirror/next/comment"
-import { linter } from "@codemirror/next/lint"
+import { linter, openLintPanel } from "@codemirror/next/lint"
 
 import { schemaLinter, schemaSyntax } from "../lib/index.js"
 
-const main = document.querySelector("main")!
+const main = document.querySelector("main")
 
 const extensions = [
 	basicSetup,
@@ -71,4 +71,6 @@ class ex:wau {
 `,
 })
 
-;(window as any).view = new EditorView({ state, parent: main })
+window.view = new EditorView({ state, parent: main })
+openLintPanel(window.view)
+window.view.focus()
