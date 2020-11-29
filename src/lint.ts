@@ -6,9 +6,13 @@ import { SyntaxNode, TreeCursor } from "lezer-tree"
 import { APG, ns } from "@underlay/apg"
 
 import { defaultTypes } from "./stdlib.js"
-
-const uriPattern = /^[a-z]+:[a-zA-Z0-9-/_.:#]+$/
-const namespacePattern = /[#/]$/
+import {
+	LintError,
+	namespacePattern,
+	ParseState,
+	parseURI,
+	uriPattern,
+} from "@underlay/apg-schema-parser"
 
 export const errorUnit: APG.Unit = Object.freeze({ type: "unit" })
 
@@ -19,29 +23,20 @@ export interface UpdateProps {
 	namespaces: Record<string, string>
 }
 
-type State = {
-	view: EditorView
-	diagnostics: Diagnostic[]
-	namespaces: Record<string, string | null>
-	backReferences: Map<Diagnostic, string>
-	schema: Record<string, APG.Type>
-	types: Record<string, APG.Type>
-}
-
 export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 	view: EditorView
 ): Diagnostic[] => {
 	const cursor = view.state.tree.cursor()
-	// printSyntax("", cursor.node)
 
-	const state: State = {
-		view: view,
-		diagnostics: [],
+	const state: ParseState = {
+		slice: ({ from, to }) => view.state.doc.sliceString(from, to),
 		namespaces: {},
-		backReferences: new Map(),
+		references: [],
 		types: { ...defaultTypes },
 		schema: {},
 	}
+
+	const diagnostics: Diagnostic[] = []
 
 	if (cursor.name === "Schema") {
 		cursor.firstChild()
@@ -53,28 +48,29 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 	do {
 		if (cursor.type.isError) {
 		} else if (cursor.type.name === "Namespace") {
-			let namespace: string | null = null
+			let namespace = ""
 
 			const uri = cursor.node.getChild("Uri")
 			if (uri !== null) {
-				const { from, to } = uri
-				namespace = view.state.doc.sliceString(from, to)
+				namespace = state.slice(uri)
 				if (!uriPattern.test(namespace)) {
+					const { from, to } = uri
 					const message = `Invalid URI: URIs must match ${uriPattern.source}`
-					state.diagnostics.push({ from, to, message, severity: "error" })
+					diagnostics.push({ from, to, message, severity: "error" })
 				} else if (!namespacePattern.test(namespace)) {
+					const { from, to } = uri
 					const message = "Invalid namespace: namespaces must end in / or #"
-					state.diagnostics.push({ from, to, message, severity: "error" })
+					diagnostics.push({ from, to, message, severity: "error" })
 				}
 			}
 
 			const identifier = cursor.node.getChild("Prefix")
 			if (identifier !== null) {
-				const { from, to } = identifier
-				const prefix = view.state.doc.sliceString(from, to)
+				const prefix = state.slice(identifier)
 				if (prefix in state.namespaces) {
+					const { from, to } = identifier
 					const message = `Duplicate namespace: ${prefix}`
-					state.diagnostics.push({ from, to, message, severity: "error" })
+					diagnostics.push({ from, to, message, severity: "error" })
 				} else {
 					state.namespaces[prefix] = namespace
 				}
@@ -82,13 +78,16 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 		} else if (cursor.type.name === "Type") {
 			const identifier = cursor.node.getChild("TypeName")
 			const expression = cursor.node.getChild("Expression")
-			const type = expression === null ? errorUnit : getType(state, expression)
+			const type =
+				expression === null
+					? errorUnit
+					: getType(state, diagnostics, expression)
 			if (identifier !== null) {
-				const { from, to } = identifier
-				const name = view.state.doc.sliceString(from, to)
+				const name = state.slice(identifier)
 				if (name in state.types) {
+					const { from, to } = identifier
 					const message = `Invalid type declaration: type ${name} has already been declared`
-					state.diagnostics.push({ from, to, message, severity: "error" })
+					diagnostics.push({ from, to, message, severity: "error" })
 				} else {
 					state.types[name] = type
 				}
@@ -96,42 +95,40 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 		} else if (cursor.type.name === "Class") {
 			const node = cursor.node.getChild("Uri")
 			if (node !== null) {
-				const uri = getURI(state, node)
+				const uri = getURI(state, diagnostics, node)
 				if (uri !== null) {
 					if (uri in state.schema) {
 						const { from, to } = node
 						const message = `Invalid class declaration: class ${uri} has already been declared`
-						state.diagnostics.push({ from, to, message, severity: "error" })
+						diagnostics.push({ from, to, message, severity: "error" })
 					} else {
 						const expression = cursor.node.getChild("Expression")
 						state.schema[uri] =
-							expression === null ? errorUnit : getType(state, expression)
+							expression === null
+								? errorUnit
+								: getType(state, diagnostics, expression)
 					}
 				}
 			}
 		} else if (cursor.type.name === "Edge") {
 			const uris = cursor.node.getChildren("Uri")
-			const names = uris.map((uri) => getURI(state, uri))
+			const names = uris.map((uri) => getURI(state, diagnostics, uri))
 			if (uris.length === 3 && names.length === 3) {
 				const [sourceNode, labelNode, targetNode] = uris
 				const [source, label, target] = names
 				if (label in state.schema) {
 					const { from, to } = labelNode
 					const message = `Invalid edge declaration: class ${label} has already been declared`
-					state.diagnostics.push({ from, to, message, severity: "error" })
+					diagnostics.push({ from, to, message, severity: "error" })
 				} else {
 					if (!(source in state.schema)) {
-						const message = `Invalid edge declaration: source class ${source} is not defined`
-						const { to, from } = sourceNode
-						const d: Diagnostic = { to, from, message, severity: "error" }
-						state.backReferences.set(d, source)
+						const { from, to } = sourceNode
+						state.references.push({ from, to, key: source })
 					}
 
 					if (!(target in state.schema)) {
-						const message = `Invalid edge declaration: target class ${target} is not defined`
-						const { to, from } = targetNode
-						const d: Diagnostic = { to, from, message, severity: "error" }
-						state.backReferences.set(d, target)
+						const { from, to } = targetNode
+						state.references.push({ from, to, key: target })
 					}
 
 					state.schema[label] = {
@@ -145,27 +142,25 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 			}
 		}
 
-		reportChildErrors(state, cursor)
+		reportChildErrors(diagnostics, cursor)
 	} while (cursor.nextSibling())
 
 	const namespaces: [string, string][] = Object.entries(
 		state.namespaces
 	).filter(([_, base]) => base !== null) as [string, string][]
 
-	const sorted = state.diagnostics
-		.filter((d) => {
-			const key = state.backReferences.get(d)
-			if (key === undefined) {
-				return true
-			} else if (key in state.schema) {
-				return false
-			} else {
-				return true
-			}
-		})
-		.sort(({ from: a, to: c }, { from: b, to: d }) =>
-			a < b ? -1 : b < a ? 1 : c < d ? -1 : d < c ? 1 : 0
-		)
+	for (const { from, to, key } of state.references) {
+		if (key in state.schema) {
+			continue
+		} else {
+			const message = `Reference error: class ${key} is not defined`
+			diagnostics.push({ from, to, message, severity: "error" })
+		}
+	}
+
+	const sorted = diagnostics.sort(({ from: a, to: c }, { from: b, to: d }) =>
+		a < b ? -1 : b < a ? 1 : c < d ? -1 : d < c ? 1 : 0
+	)
 
 	onChange({
 		errors: sorted.length,
@@ -177,43 +172,44 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 	return sorted
 }
 
-function getURI(state: State, node: SyntaxNode): string {
-	const { from, to } = node
-	const value = state.view.state.doc.sliceString(from, to)
-	const index = value.indexOf(":")
-	if (index === -1) {
-		const message = `Invalid URI: URIs must be of the form [namespace]:[path]`
-		state.diagnostics.push({ from, to, message, severity: "error" })
-		return value
+function getURI(
+	state: ParseState,
+	diagnostics: Diagnostic[],
+	node: SyntaxNode
+): string {
+	try {
+		return parseURI(state, node)
+	} catch (e) {
+		if (e instanceof LintError) {
+			const { from, to, message, value } = e
+			diagnostics.push({ from, to, message, severity: "error" })
+			return value
+		} else {
+			throw e
+		}
 	}
-
-	const prefix = value.slice(0, index)
-	if (prefix in state.namespaces) {
-		const namespace = state.namespaces[prefix]
-		return namespace === null ? value : namespace + value.slice(index + 1)
-	}
-
-	const message = `Invalid URI: namespace ${prefix} is not defined`
-	state.diagnostics.push({ from, to, message, severity: "error" })
-	return value
 }
 
 // Variable | Optional | Reference | Unit | Iri | Literal | Product | Coproduct
-function getType(state: State, node: SyntaxNode): APG.Type {
+function getType(
+	state: ParseState,
+	diagnostics: Diagnostic[],
+	node: SyntaxNode
+): APG.Type {
 	if (node.name === "Variable") {
-		const { from, to } = node
-		const value = state.view.state.doc.sliceString(from, to)
+		const value = state.slice(node)
 		if (value in state.types) {
 			return state.types[value]
 		} else {
+			const { from, to } = node
 			const message = `Type ${value} is not defined`
-			state.diagnostics.push({ from, to, message, severity: "error" })
+			diagnostics.push({ from, to, message, severity: "error" })
 			return errorUnit
 		}
 	} else if (node.name === "Optional") {
 		const expression = node.getChild("Expression")
-		const type: APG.Type =
-			expression === null ? errorUnit : getType(state, expression)
+		const type =
+			expression === null ? errorUnit : getType(state, diagnostics, expression)
 		return {
 			type: "coproduct",
 			options: { [ns.none]: { type: "unit" }, [ns.some]: type },
@@ -224,13 +220,10 @@ function getType(state: State, node: SyntaxNode): APG.Type {
 			return errorUnit
 		}
 
-		const key = getURI(state, uri)
+		const key = getURI(state, diagnostics, uri)
 		if (!(key in state.schema)) {
-			const { to, from } = uri
-			const message = `Reference error: class ${key} is not defined`
-			const d: Diagnostic = { to, from, message, severity: "error" }
-			state.backReferences.set(d, key)
-			state.diagnostics.push(d)
+			const { from, to } = uri
+			state.references.push({ from, to, key })
 		}
 
 		return { type: "reference", value: key }
@@ -243,7 +236,7 @@ function getType(state: State, node: SyntaxNode): APG.Type {
 		if (uri === null) {
 			return errorUnit
 		}
-		const datatype = getURI(state, uri)
+		const datatype = getURI(state, diagnostics, uri)
 		return { type: "literal", datatype }
 	} else if (node.name === "Product") {
 		const components: Record<string, APG.Type> = {}
@@ -253,15 +246,17 @@ function getType(state: State, node: SyntaxNode): APG.Type {
 				continue
 			}
 
-			const key = getURI(state, uri)
+			const key = getURI(state, diagnostics, uri)
 			if (key in components) {
-				const { to, from } = uri
+				const { from, to } = uri
 				const message = `Duplicate product component key`
-				state.diagnostics.push({ to, from, message, severity: "error" })
+				diagnostics.push({ from, to, message, severity: "error" })
 			} else {
 				const expression = component.getChild("Expression")
 				components[key] =
-					expression === null ? errorUnit : getType(state, expression)
+					expression === null
+						? errorUnit
+						: getType(state, diagnostics, expression)
 			}
 		}
 
@@ -274,15 +269,17 @@ function getType(state: State, node: SyntaxNode): APG.Type {
 				continue
 			}
 
-			const key = getURI(state, uri)
+			const key = getURI(state, diagnostics, uri)
 			if (key in options) {
-				const { to, from } = uri
+				const { from, to } = uri
 				const message = `Duplicate coproduct option key`
-				state.diagnostics.push({ to, from, message, severity: "error" })
+				diagnostics.push({ from, to, message, severity: "error" })
 			} else {
 				const expression = option.getChild("Expression")
 				options[key] =
-					expression === null ? errorUnit : getType(state, expression)
+					expression === null
+						? errorUnit
+						: getType(state, diagnostics, expression)
 			}
 		}
 
@@ -299,15 +296,15 @@ function getType(state: State, node: SyntaxNode): APG.Type {
 // 	}
 // }
 
-function reportChildErrors(state: State, cursor: TreeCursor) {
+function reportChildErrors(diagnostics: Diagnostic[], cursor: TreeCursor) {
 	if (cursor.type.isError) {
 		const { from, to } = cursor
 		const message = `Syntax error: unexpected or missing token (that's all we know)`
-		state.diagnostics.push({ from, to, message, severity: "error" })
+		diagnostics.push({ from, to, message, severity: "error" })
 	}
 	if (cursor.firstChild()) {
 		do {
-			reportChildErrors(state, cursor)
+			reportChildErrors(diagnostics, cursor)
 		} while (cursor.nextSibling())
 		cursor.parent()
 	}

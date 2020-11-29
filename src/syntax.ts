@@ -8,7 +8,7 @@ import {
 import { styleTags } from "@codemirror/next/highlight"
 import { SyntaxNode } from "lezer-tree"
 
-import { parser } from "../grammar/index.js"
+import { parser } from "@underlay/apg-schema-parser/grammar/index.js"
 
 export const schemaSyntax = LezerSyntax.define(
 	parser.withProps(
