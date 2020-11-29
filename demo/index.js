@@ -1,45 +1,11 @@
-import {
-	EditorState,
-	EditorView,
-	basicSetup,
-} from "@codemirror/next/basic-setup"
-import { keymap } from "@codemirror/next/view"
-import {
-	defaultKeymap,
-	indentMore,
-	indentLess,
-} from "@codemirror/next/commands"
-import { commentKeymap } from "@codemirror/next/comment"
-import { linter, openLintPanel } from "@codemirror/next/lint"
+import React from "react"
+import ReactDOM from "react-dom"
 
-import { schemaLinter, schemaSyntax } from "../lib/index.js"
+import { Editor } from "../lib/index"
 
 const main = document.querySelector("main")
 
-const extensions = [
-	basicSetup,
-	schemaSyntax,
-	EditorState.indentUnit.of("  "),
-	keymap([
-		...defaultKeymap,
-		...commentKeymap,
-		{
-			key: "Tab",
-			preventDefault: true,
-			run: indentMore,
-		},
-		{
-			key: "Shift-Tab",
-			preventDefault: true,
-			run: indentLess,
-		},
-	]),
-	linter(schemaLinter(() => {})),
-]
-
-const state = EditorState.create({
-	extensions,
-	doc: `# Welcome to the schema editor!
+const initialValue = `# Welcome to the schema editor!
 # If you're new, you probably want to read
 # the schema language documentation here:
 # http://r1.underlay.org/docs/schemas
@@ -68,9 +34,8 @@ class ex:wau {
 
 
 
-`,
-})
+`
 
-window.view = new EditorView({ state, parent: main })
-openLintPanel(window.view)
-window.view.focus()
+console.log("got editor", Editor)
+
+ReactDOM.render(React.createElement(Editor, { initialValue }), main)

@@ -4,40 +4,11 @@
 		<meta charset="UTF-8" />
 		<title>codemirror demo</title>
 		<script defer src="index.min.js"></script>
+		<link rel="stylesheet" href="../style.css" type="text/css" />
 	</head>
 	<style>
-		@import url(https://cdn.jsdelivr.net/gh/tonsky/FiraCode@4/distr/fira_code.css);
-
 		html {
 			background-color: papayawhip;
-		}
-
-		main {
-			max-width: 600px;
-			border: 1px solid lightgrey;
-			border-radius: 1px;
-		}
-
-		.editor .cm-scroller {
-			background-color: white;
-			font-family: "Fira Code", monospace;
-		}
-
-		@supports (font-variation-settings: normal) {
-			.editor .cm-scroller {
-				font-family: "Fira Code VF", monospace;
-			}
-		}
-
-		.editor .cm-panel-lint,
-		.editor .cm-tooltip-lint {
-			font-family: "Fira Code", monospace;
-			font-size: 0.75em;
-		}
-
-		.editor .cm-panel-lint button {
-			display: none;
-			pointer-events: none;
 		}
 	</style>
 	<body>

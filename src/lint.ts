@@ -289,13 +289,6 @@ function getType(
 	}
 }
 
-// function printSyntax(prefix: string, node: SyntaxNode) {
-// 	console.log(`${prefix}- ${node.type.name} ${node.from} ${node.to}`)
-// 	for (let child = node.firstChild; child !== null; child = child.nextSibling) {
-// 		printSyntax(prefix + "  ", child)
-// 	}
-// }
-
 function reportChildErrors(diagnostics: Diagnostic[], cursor: TreeCursor) {
 	if (cursor.type.isError) {
 		const { from, to } = cursor
