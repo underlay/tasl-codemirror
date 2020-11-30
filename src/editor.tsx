@@ -12,14 +12,17 @@ import {
 } from "@codemirror/next/commands"
 import { keymap } from "@codemirror/next/view"
 import { commentKeymap } from "@codemirror/next/comment"
-import { linter, openLintPanel } from "@codemirror/next/lint"
+import { openLintPanel } from "@codemirror/next/lint"
 
-import { schemaLinter, UpdateProps } from "./lint.js"
+import { makeSchemaLinter, UpdateProps } from "./lint.js"
 import { schemaSyntax } from "./syntax.js"
+import { Extension } from "@codemirror/next/state"
 
 export interface EditorProps {
 	initialValue: string
 	onChange?: (props: UpdateProps) => void
+	readOnly?: boolean
+	noLint?: boolean
 }
 
 const baseExtensions = [
@@ -41,7 +44,12 @@ const baseExtensions = [
 	]),
 ]
 
-export function Editor({ initialValue, onChange }: EditorProps) {
+export function Editor({
+	initialValue,
+	onChange,
+	readOnly,
+	noLint,
+}: EditorProps) {
 	const div = useRef<HTMLDivElement>(null)
 	const view = useRef<EditorView | null>(null)
 	const state = useRef<EditorState | null>(null)
@@ -58,14 +66,26 @@ export function Editor({ initialValue, onChange }: EditorProps) {
 
 	useEffect(() => {
 		if (div.current) {
-			const extensions = [...baseExtensions, linter(schemaLinter(handleChange))]
+			const extensions: Extension[] = [...baseExtensions]
+
+			if (!noLint) {
+				extensions.push(makeSchemaLinter(handleChange))
+			}
+
+			if (readOnly) {
+				extensions.push(EditorView.editable.of(false))
+			}
+
 			state.current = EditorState.create({ doc: initialValue, extensions })
 			view.current = new EditorView({
 				state: state.current,
 				parent: div.current,
 			})
-			openLintPanel(view.current)
-			view.current.focus()
+
+			if (!noLint) {
+				openLintPanel(view.current)
+				view.current.focus()
+			}
 		}
 	}, [])
 

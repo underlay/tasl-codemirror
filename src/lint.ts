@@ -1,5 +1,5 @@
-import { EditorState } from "@codemirror/next/state"
-import { Diagnostic } from "@codemirror/next/lint"
+import { EditorState, Extension } from "@codemirror/next/state"
+import { Diagnostic, linter } from "@codemirror/next/lint"
 import { EditorView } from "@codemirror/next/view"
 import { SyntaxNode, TreeCursor } from "lezer-tree"
 
@@ -23,13 +23,13 @@ export interface UpdateProps {
 	namespaces: Record<string, string>
 }
 
-export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
-	view: EditorView
-): Diagnostic[] => {
-	const cursor = view.state.tree.cursor()
+export function lintView({
+	state,
+}: EditorView): UpdateProps & { diagnostics: Diagnostic[] } {
+	const cursor = state.tree.cursor()
 
-	const state: ParseState = {
-		slice: ({ from, to }) => view.state.doc.sliceString(from, to),
+	const parseState: ParseState = {
+		slice: ({ from, to }) => state.doc.sliceString(from, to),
 		namespaces: {},
 		references: [],
 		types: { ...defaultTypes },
@@ -41,8 +41,13 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 	if (cursor.name === "Schema") {
 		cursor.firstChild()
 	} else {
-		onChange({ errors: 1, state: view.state, schema: {}, namespaces: {} })
-		return []
+		diagnostics.push({
+			from: cursor.from,
+			to: cursor.to,
+			message: "Syntax error: invalid document",
+			severity: "error",
+		})
+		return { errors: 1, state, schema: {}, namespaces: {}, diagnostics }
 	}
 
 	do {
@@ -52,7 +57,7 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 
 			const uri = cursor.node.getChild("Uri")
 			if (uri !== null) {
-				namespace = state.slice(uri)
+				namespace = parseState.slice(uri)
 				if (!uriPattern.test(namespace)) {
 					const { from, to } = uri
 					const message = `Invalid URI: URIs must match ${uriPattern.source}`
@@ -66,13 +71,13 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 
 			const identifier = cursor.node.getChild("Prefix")
 			if (identifier !== null) {
-				const prefix = state.slice(identifier)
-				if (prefix in state.namespaces) {
+				const prefix = parseState.slice(identifier)
+				if (prefix in parseState.namespaces) {
 					const { from, to } = identifier
 					const message = `Duplicate namespace: ${prefix}`
 					diagnostics.push({ from, to, message, severity: "error" })
 				} else {
-					state.namespaces[prefix] = namespace
+					parseState.namespaces[prefix] = namespace
 				}
 			}
 		} else if (cursor.type.name === "Type") {
@@ -81,57 +86,57 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 			const type =
 				expression === null
 					? errorUnit
-					: getType(state, diagnostics, expression)
+					: getType(parseState, diagnostics, expression)
 			if (identifier !== null) {
-				const name = state.slice(identifier)
-				if (name in state.types) {
+				const name = parseState.slice(identifier)
+				if (name in parseState.types) {
 					const { from, to } = identifier
 					const message = `Invalid type declaration: type ${name} has already been declared`
 					diagnostics.push({ from, to, message, severity: "error" })
 				} else {
-					state.types[name] = type
+					parseState.types[name] = type
 				}
 			}
 		} else if (cursor.type.name === "Class") {
 			const node = cursor.node.getChild("Uri")
 			if (node !== null) {
-				const uri = getURI(state, diagnostics, node)
+				const uri = getURI(parseState, diagnostics, node)
 				if (uri !== null) {
-					if (uri in state.schema) {
+					if (uri in parseState.schema) {
 						const { from, to } = node
 						const message = `Invalid class declaration: class ${uri} has already been declared`
 						diagnostics.push({ from, to, message, severity: "error" })
 					} else {
 						const expression = cursor.node.getChild("Expression")
-						state.schema[uri] =
+						parseState.schema[uri] =
 							expression === null
 								? errorUnit
-								: getType(state, diagnostics, expression)
+								: getType(parseState, diagnostics, expression)
 					}
 				}
 			}
 		} else if (cursor.type.name === "Edge") {
 			const uris = cursor.node.getChildren("Uri")
-			const names = uris.map((uri) => getURI(state, diagnostics, uri))
+			const names = uris.map((uri) => getURI(parseState, diagnostics, uri))
 			if (uris.length === 3 && names.length === 3) {
 				const [sourceNode, labelNode, targetNode] = uris
 				const [source, label, target] = names
-				if (label in state.schema) {
+				if (label in parseState.schema) {
 					const { from, to } = labelNode
 					const message = `Invalid edge declaration: class ${label} has already been declared`
 					diagnostics.push({ from, to, message, severity: "error" })
 				} else {
-					if (!(source in state.schema)) {
+					if (!(source in parseState.schema)) {
 						const { from, to } = sourceNode
-						state.references.push({ from, to, key: source })
+						parseState.references.push({ from, to, key: source })
 					}
 
-					if (!(target in state.schema)) {
+					if (!(target in parseState.schema)) {
 						const { from, to } = targetNode
-						state.references.push({ from, to, key: target })
+						parseState.references.push({ from, to, key: target })
 					}
 
-					state.schema[label] = {
+					parseState.schema[label] = {
 						type: "product",
 						components: {
 							[ns.source]: { type: "reference", value: source },
@@ -146,11 +151,11 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 	} while (cursor.nextSibling())
 
 	const namespaces: [string, string][] = Object.entries(
-		state.namespaces
+		parseState.namespaces
 	).filter(([_, base]) => base !== null) as [string, string][]
 
-	for (const { from, to, key } of state.references) {
-		if (key in state.schema) {
+	for (const { from, to, key } of parseState.references) {
+		if (key in parseState.schema) {
 			continue
 		} else {
 			const message = `Reference error: class ${key} is not defined`
@@ -162,15 +167,23 @@ export const schemaLinter = (onChange: (props: UpdateProps) => void) => (
 		a < b ? -1 : b < a ? 1 : c < d ? -1 : d < c ? 1 : 0
 	)
 
-	onChange({
+	return {
 		errors: sorted.length,
-		state: view.state,
-		schema: state.schema,
+		state: state,
+		schema: parseState.schema,
 		namespaces: Object.fromEntries(namespaces),
-	})
-
-	return sorted
+		diagnostics: sorted,
+	}
 }
+
+export const makeSchemaLinter = (
+	onChange: (props: UpdateProps) => void
+): Extension =>
+	linter((view: EditorView) => {
+		const { diagnostics, ...props } = lintView(view)
+		onChange(props)
+		return diagnostics
+	})
 
 function getURI(
 	state: ParseState,
