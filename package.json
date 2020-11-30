@@ -1,9 +1,10 @@
 {
-	"name": "@underlay/apg-schema-codemirror",
-	"version": "1.0.6",
+	"name": "@underlay/tasl-codemirror",
+	"version": "1.1.0",
 	"description": "",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
+	"files": "lib",
 	"scripts": {
 		"test": "npx jest",
 		"dev": "webpack --mode development --watch",
@@ -11,21 +12,20 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/underlay/apg-schema-codemirror.git"
+		"url": "git+https://github.com/underlay/tasl-codemirror.git"
 	},
 	"author": "Joel Gustafson",
 	"license": "MIT",
 	"bugs": {
-		"url": "https://github.com/underlay/apg-schema-codemirror/issues"
+		"url": "https://github.com/underlay/tasl-codemirror/issues"
 	},
-	"homepage": "https://github.com/underlay/apg-schema-codemirror#readme",
+	"homepage": "https://github.com/underlay/tasl-codemirror#readme",
 	"dependencies": {
 		"@underlay/apg": "^0.7.1",
 		"lezer": "^0.12.1",
 		"n3.ts": "^0.2.0"
 	},
 	"devDependencies": {
-		"@babel/cli": "^7.12.8",
 		"@babel/core": "^7.12.9",
 		"@babel/plugin-transform-modules-commonjs": "^7.12.1",
 		"@babel/preset-env": "^7.12.7",
@@ -33,7 +33,7 @@
 		"@codemirror/next": "^0.14.0",
 		"@types/jest": "^26.0.15",
 		"@types/react": "^17.0.0",
-		"@underlay/apg-schema-parser": "^0.1.2",
+		"@underlay/tasl-lezer": "^0.2.0",
 		"babel-loader": "^8.2.2",
 		"jest": "^26.6.3",
 		"lezer-generator": "^0.12.0",
@@ -46,8 +46,8 @@
 		"webpack-cli": "^4.2.0"
 	},
 	"peerDependencies": {
-		"react": "^17.0.1",
 		"@codemirror/next": "^0.14.0",
-		"@underlay/apg-schema-parser": "^0.1.1"
+		"@underlay/tasl-lezer": "^0.2.0",
+		"react": "^17.0.1"
 	}
 }

@@ -12,7 +12,7 @@ import {
 	ParseState,
 	parseURI,
 	uriPattern,
-} from "@underlay/apg-schema-parser"
+} from "@underlay/tasl-lezer"
 
 export const errorUnit: APG.Unit = Object.freeze({ type: "unit" })
 
