@@ -1,3 +1,3 @@
 # apg-schema-codemirror
 
-- [demo](https://underlay.github.io/apg-schema-codemirror/demo/index.html)
+- [demo](https://underlay.github.io/tasl-codemirror/demo/index.html)
