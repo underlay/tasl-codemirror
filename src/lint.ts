@@ -5,10 +5,9 @@ import { SyntaxNode, TreeCursor } from "lezer-tree"
 
 import { APG, ns } from "@underlay/apg"
 
-// import { defaultTypes } from "./stdlib.js"
-
 import {
 	defaultTypes,
+	defaultNamespaces,
 	LintError,
 	namespacePattern,
 	ParseState,
@@ -31,7 +30,7 @@ export function lintView({
 
 	const parseState: ParseState = {
 		slice: ({ from, to }) => state.doc.sliceString(from, to),
-		namespaces: {},
+		namespaces: { ...defaultNamespaces },
 		references: [],
 		types: { ...defaultTypes },
 		schema: {},
