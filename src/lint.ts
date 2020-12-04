@@ -5,16 +5,17 @@ import { SyntaxNode, TreeCursor } from "lezer-tree"
 
 import { APG, ns } from "@underlay/apg"
 
-import { defaultTypes } from "./stdlib.js"
+// import { defaultTypes } from "./stdlib.js"
+
 import {
+	defaultTypes,
 	LintError,
 	namespacePattern,
 	ParseState,
 	parseURI,
 	uriPattern,
 } from "@underlay/tasl-lezer"
-
-export const errorUnit: APG.Unit = Object.freeze({ type: "unit" })
+import { errorUnit } from "./errorUnit.js"
 
 export interface UpdateProps {
 	errors: number
