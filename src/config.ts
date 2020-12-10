@@ -9,7 +9,6 @@ import { commentKeymap } from "@codemirror/next/comment"
 
 import { Extension } from "@codemirror/next/state"
 
-import { foldGutter } from "@codemirror/next/fold"
 import { lineNumbers } from "@codemirror/next/gutter"
 import { highlightSelectionMatches } from "@codemirror/next/highlight-selection"
 import { defaultHighlightStyle } from "@codemirror/next/highlight"
@@ -19,7 +18,6 @@ import { schemaSyntax } from "./syntax.js"
 export const readOnlyConfig: Extension[] = [
 	EditorView.editable.of(false),
 	lineNumbers(),
-	foldGutter(),
 	defaultHighlightStyle,
 	highlightSelectionMatches(),
 	schemaSyntax,
