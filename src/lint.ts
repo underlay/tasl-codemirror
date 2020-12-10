@@ -15,7 +15,7 @@ import {
 	parseURI,
 	uriPattern,
 } from "@underlay/tasl-lezer"
-import { errorUnit } from "./errorUnit.js"
+import { errorUnit } from "./error.js"
 
 export interface UpdateProps {
 	errors: number
@@ -212,11 +212,13 @@ export function lintView({
 }
 
 export const makeSchemaLinter = (
-	onChange: (props: UpdateProps) => void
+	onChange?: (props: UpdateProps) => void
 ): Extension =>
 	linter((view: EditorView) => {
 		const { diagnostics, ...props } = lintView(view)
-		onChange(props)
+		if (onChange !== undefined) {
+			onChange(props)
+		}
 		return diagnostics
 	})
 
@@ -300,6 +302,7 @@ function getType(
 				const message = `Duplicate product component key`
 				diagnostics.push({ from, to, message, severity: "error" })
 			}
+
 			const expression = component.getChild("Expression")
 			components[key] =
 				expression === null
@@ -322,6 +325,7 @@ function getType(
 				const message = `Duplicate coproduct option key`
 				diagnostics.push({ from, to, message, severity: "error" })
 			}
+
 			const expression = option.getChild("Expression")
 			options[key] =
 				expression === null

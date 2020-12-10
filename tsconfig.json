@@ -10,7 +10,6 @@
 		"declaration": true,
 		"alwaysStrict": true,
 		"moduleResolution": "node",
-		"esModuleInterop": true,
-		"jsx": "react"
+		"esModuleInterop": true
 	}
 }

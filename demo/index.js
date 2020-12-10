@@ -1,9 +1,7 @@
-import React from "react"
-import ReactDOM from "react-dom"
-
-import { Editor } from "../lib/index"
-
-const main = document.querySelector("main")
+import { openLintPanel } from "@codemirror/next/lint"
+import { EditorState } from "@codemirror/next/state"
+import { EditorView } from "@codemirror/next/view"
+import { editableConfig, makeSchemaLinter } from "../lib/index"
 
 const initialValue = `# Welcome to the schema editor!
 # If you're new, you probably want to read
@@ -36,13 +34,18 @@ class ex:wau {
 
 `
 
-console.log("got editor", Editor)
+const linter = makeSchemaLinter()
+const extensions = [...editableConfig, linter]
 
-ReactDOM.render(
-	React.createElement(Editor, {
-		initialValue,
-		readOnly: false,
-		onChange: (props) => console.log(props),
-	}),
-	main
-)
+const state = EditorState.create({
+	doc: initialValue,
+	extensions,
+})
+
+const view = new EditorView({
+	state,
+	parent: document.getElementById("editor"),
+})
+
+openLintPanel(view)
+view.focus()
