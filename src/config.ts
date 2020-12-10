@@ -15,6 +15,11 @@ import { defaultHighlightStyle } from "@codemirror/next/highlight"
 
 import { schemaSyntax } from "./syntax.js"
 
+export * from "@codemirror/next/state"
+
+export { EditorView } from "@codemirror/next/view"
+export { EditorState } from "@codemirror/next/state"
+
 export const readOnlyConfig: Extension[] = [
 	EditorView.editable.of(false),
 	lineNumbers(),
