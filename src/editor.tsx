@@ -17,7 +17,7 @@ import { EditorState, Extension } from "@codemirror/next/state"
 import { foldGutter } from "@codemirror/next/fold"
 import { lineNumbers } from "@codemirror/next/gutter"
 import { highlightSelectionMatches } from "@codemirror/next/highlight-selection"
-import { defaultHighlighter } from "@codemirror/next/highlight"
+import { defaultHighlightStyle } from "@codemirror/next/highlight"
 
 export interface EditorProps {
 	initialValue: string
@@ -29,7 +29,7 @@ const readOnlySetup: Extension = [
 	EditorView.editable.of(false),
 	lineNumbers(),
 	foldGutter(),
-	defaultHighlighter,
+	defaultHighlightStyle,
 	highlightSelectionMatches(),
 ]
 

@@ -1,2 +1,2 @@
-import { LezerSyntax } from "@codemirror/next/syntax";
-export declare const schemaSyntax: LezerSyntax;
+import { LezerLanguage } from "@codemirror/next/language";
+export declare const schemaSyntax: LezerLanguage;

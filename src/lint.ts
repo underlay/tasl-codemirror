@@ -1,6 +1,7 @@
 import { EditorState, Extension } from "@codemirror/next/state"
 import { Diagnostic, linter } from "@codemirror/next/lint"
 import { EditorView } from "@codemirror/next/view"
+import { syntaxTree } from "@codemirror/next/language"
 import { SyntaxNode, TreeCursor } from "lezer-tree"
 
 import { APG, ns } from "@underlay/apg"
@@ -26,11 +27,11 @@ export interface UpdateProps {
 export function lintView({
 	state,
 }: EditorView): UpdateProps & { diagnostics: Diagnostic[] } {
-	const cursor = state.tree.cursor()
+	const cursor = syntaxTree(state).cursor()
 
 	const parseState: ParseState = {
 		slice: ({ from, to }) => state.doc.sliceString(from, to),
-		namespaces: { ...defaultNamespaces },
+		namespaces: {},
 		references: [],
 		types: { ...defaultTypes },
 		schema: {},
@@ -125,24 +126,58 @@ export function lintView({
 					const { from, to } = labelNode
 					const message = `Invalid edge declaration: class ${label} has already been declared`
 					diagnostics.push({ from, to, message, severity: "error" })
-				} else {
-					if (!(source in parseState.schema)) {
-						const { from, to } = sourceNode
-						parseState.references.push({ from, to, key: source })
-					}
+				}
 
-					if (!(target in parseState.schema)) {
-						const { from, to } = targetNode
-						parseState.references.push({ from, to, key: target })
-					}
+				if (!(source in parseState.schema)) {
+					const { from, to } = sourceNode
+					parseState.references.push({ from, to, key: source })
+				}
 
-					parseState.schema[label] = {
-						type: "product",
-						components: {
-							[ns.source]: { type: "reference", value: source },
-							[ns.target]: { type: "reference", value: target },
+				if (!(target in parseState.schema)) {
+					const { from, to } = targetNode
+					parseState.references.push({ from, to, key: target })
+				}
+
+				const components: Record<string, APG.Type> = {
+					[ns.source]: { type: "reference", value: source },
+					[ns.target]: { type: "reference", value: target },
+				}
+
+				const expression = cursor.node.getChild("Expression")
+				if (expression !== null) {
+					components[ns.value] = getType(parseState, diagnostics, expression)
+				}
+
+				parseState.schema[label] = { type: "product", components }
+			}
+		} else if (cursor.type.name === "List") {
+			const node = cursor.node.getChild("Uri")
+			const expression = cursor.node.getChild("Expression")
+			const head =
+				expression === null
+					? errorUnit
+					: getType(parseState, diagnostics, expression)
+
+			if (node !== null) {
+				const uri = getURI(parseState, diagnostics, node)
+				if (uri in parseState.schema) {
+					const { from, to } = node
+					const message = `Invalid list declaration: class ${uri} has already been declared`
+					diagnostics.push({ from, to, message, severity: "error" })
+				}
+
+				parseState.schema[uri] = {
+					type: "coproduct",
+					options: {
+						[ns.none]: { type: "unit" },
+						[ns.some]: {
+							type: "product",
+							components: {
+								[ns.head]: head,
+								[ns.tail]: { type: "reference", value: uri },
+							},
 						},
-					}
+					},
 				}
 			}
 		}
@@ -171,7 +206,7 @@ export function lintView({
 		errors: sorted.length,
 		state: state,
 		schema: parseState.schema,
-		namespaces: Object.fromEntries(namespaces),
+		namespaces: { ...defaultNamespaces, ...Object.fromEntries(namespaces) },
 		diagnostics: sorted,
 	}
 }
@@ -264,13 +299,12 @@ function getType(
 				const { from, to } = uri
 				const message = `Duplicate product component key`
 				diagnostics.push({ from, to, message, severity: "error" })
-			} else {
-				const expression = component.getChild("Expression")
-				components[key] =
-					expression === null
-						? errorUnit
-						: getType(state, diagnostics, expression)
 			}
+			const expression = component.getChild("Expression")
+			components[key] =
+				expression === null
+					? errorUnit
+					: getType(state, diagnostics, expression)
 		}
 
 		return { type: "product", components }
@@ -287,13 +321,12 @@ function getType(
 				const { from, to } = uri
 				const message = `Duplicate coproduct option key`
 				diagnostics.push({ from, to, message, severity: "error" })
-			} else {
-				const expression = option.getChild("Expression")
-				options[key] =
-					expression === null
-						? errorUnit
-						: getType(state, diagnostics, expression)
 			}
+			const expression = option.getChild("Expression")
+			options[key] =
+				expression === null
+					? { type: "unit" }
+					: getType(state, diagnostics, expression)
 		}
 
 		return { type: "coproduct", options }

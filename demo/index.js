@@ -39,6 +39,10 @@ class ex:wau {
 console.log("got editor", Editor)
 
 ReactDOM.render(
-	React.createElement(Editor, { initialValue, readOnly: true }),
+	React.createElement(Editor, {
+		initialValue,
+		readOnly: false,
+		onChange: (props) => console.log(props),
+	}),
 	main
 )
