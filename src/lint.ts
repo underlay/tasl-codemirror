@@ -56,15 +56,15 @@ export function lintView({
 		} else if (cursor.type.name === "Namespace") {
 			let namespace = ""
 
-			const uri = cursor.node.getChild("Uri")
-			if (uri !== null) {
-				namespace = parseState.slice(uri)
+			const term = cursor.node.getChild("Term")
+			if (term !== null) {
+				namespace = parseState.slice(term)
 				if (!uriPattern.test(namespace)) {
-					const { from, to } = uri
+					const { from, to } = term
 					const message = `Invalid URI: URIs must match ${uriPattern.source}`
 					diagnostics.push({ from, to, message, severity: "error" })
 				} else if (!namespacePattern.test(namespace)) {
-					const { from, to } = uri
+					const { from, to } = term
 					const message = "Invalid namespace: namespaces must end in / or #"
 					diagnostics.push({ from, to, message, severity: "error" })
 				}
@@ -99,12 +99,12 @@ export function lintView({
 				}
 			}
 		} else if (cursor.type.name === "Class") {
-			const node = cursor.node.getChild("Uri")
-			if (node !== null) {
-				const uri = getURI(parseState, diagnostics, node)
+			const term = cursor.node.getChild("Term")
+			if (term !== null) {
+				const uri = getURI(parseState, diagnostics, term)
 				if (uri !== null) {
 					if (uri in parseState.schema) {
-						const { from, to } = node
+						const { from, to } = term
 						const message = `Invalid class declaration: class ${uri} has already been declared`
 						diagnostics.push({ from, to, message, severity: "error" })
 					} else {
@@ -117,11 +117,11 @@ export function lintView({
 				}
 			}
 		} else if (cursor.type.name === "Edge") {
-			const uris = cursor.node.getChildren("Uri")
-			const names = uris.map((uri) => getURI(parseState, diagnostics, uri))
-			if (uris.length === 3 && names.length === 3) {
-				const [sourceNode, labelNode, targetNode] = uris
-				const [source, label, target] = names
+			const terms = cursor.node.getChildren("Term")
+			const uris = terms.map((uri) => getURI(parseState, diagnostics, uri))
+			if (terms.length === 3 && uris.length === 3) {
+				const [sourceNode, labelNode, targetNode] = terms
+				const [source, label, target] = uris
 				if (label in parseState.schema) {
 					const { from, to } = labelNode
 					const message = `Invalid edge declaration: class ${label} has already been declared`
@@ -139,8 +139,8 @@ export function lintView({
 				}
 
 				const components: Record<string, APG.Type> = {
-					[ns.source]: { type: "reference", value: source },
-					[ns.target]: { type: "reference", value: target },
+					[ns.source]: APG.reference(source),
+					[ns.target]: APG.reference(target),
 				}
 
 				const expression = cursor.node.getChild("Expression")
@@ -148,37 +148,31 @@ export function lintView({
 					components[ns.value] = getType(parseState, diagnostics, expression)
 				}
 
-				parseState.schema[label] = { type: "product", components }
+				parseState.schema[label] = APG.product(components)
 			}
 		} else if (cursor.type.name === "List") {
-			const node = cursor.node.getChild("Uri")
+			const term = cursor.node.getChild("Term")
 			const expression = cursor.node.getChild("Expression")
 			const head =
 				expression === null
 					? errorUnit
 					: getType(parseState, diagnostics, expression)
 
-			if (node !== null) {
-				const uri = getURI(parseState, diagnostics, node)
+			if (term !== null) {
+				const uri = getURI(parseState, diagnostics, term)
 				if (uri in parseState.schema) {
-					const { from, to } = node
+					const { from, to } = term
 					const message = `Invalid list declaration: class ${uri} has already been declared`
 					diagnostics.push({ from, to, message, severity: "error" })
 				}
 
-				parseState.schema[uri] = {
-					type: "coproduct",
-					options: {
-						[ns.none]: { type: "unit" },
-						[ns.some]: {
-							type: "product",
-							components: {
-								[ns.head]: head,
-								[ns.tail]: { type: "reference", value: uri },
-							},
-						},
-					},
-				}
+				parseState.schema[uri] = APG.coproduct({
+					[ns.none]: APG.product({}),
+					[ns.some]: APG.coproduct({
+						[ns.head]: head,
+						[ns.tail]: APG.reference(uri),
+					}),
+				})
 			}
 		}
 
@@ -260,45 +254,40 @@ function getType(
 		const expression = node.getChild("Expression")
 		const type =
 			expression === null ? errorUnit : getType(state, diagnostics, expression)
-		return {
-			type: "coproduct",
-			options: { [ns.none]: { type: "unit" }, [ns.some]: type },
-		}
+		return APG.coproduct({ [ns.none]: APG.product({}), [ns.some]: type })
 	} else if (node.name === "Reference") {
-		const uri = node.getChild("Uri")
-		if (uri === null) {
+		const term = node.getChild("Term")
+		if (term === null) {
 			return errorUnit
 		}
 
-		const key = getURI(state, diagnostics, uri)
+		const key = getURI(state, diagnostics, term)
 		if (!(key in state.schema)) {
-			const { from, to } = uri
+			const { from, to } = term
 			state.references.push({ from, to, key })
 		}
 
-		return { type: "reference", value: key }
-	} else if (node.name === "Unit") {
-		return { type: "unit" }
-	} else if (node.name === "Iri") {
-		return { type: "uri" }
+		return APG.reference(key)
+	} else if (node.name === "Uri") {
+		return APG.uri()
 	} else if (node.name === "Literal") {
-		const uri = node.getChild("Uri")
-		if (uri === null) {
+		const term = node.getChild("Term")
+		if (term === null) {
 			return errorUnit
 		}
-		const datatype = getURI(state, diagnostics, uri)
-		return { type: "literal", datatype }
+		const datatype = getURI(state, diagnostics, term)
+		return APG.literal(datatype)
 	} else if (node.name === "Product") {
 		const components: Record<string, APG.Type> = {}
 		for (const component of node.getChildren("Component")) {
-			const uri = component.getChild("Uri")
-			if (uri === null) {
+			const term = component.getChild("Term")
+			if (term === null) {
 				continue
 			}
 
-			const key = getURI(state, diagnostics, uri)
+			const key = getURI(state, diagnostics, term)
 			if (key in components) {
-				const { from, to } = uri
+				const { from, to } = term
 				const message = `Duplicate product component key`
 				diagnostics.push({ from, to, message, severity: "error" })
 			}
@@ -314,14 +303,14 @@ function getType(
 	} else if (node.name === "Coproduct") {
 		const options: Record<string, APG.Type> = {}
 		for (const option of node.getChildren("Option")) {
-			const uri = option.getChild("Uri")
-			if (uri === null) {
+			const term = option.getChild("Term")
+			if (term === null) {
 				continue
 			}
 
-			const key = getURI(state, diagnostics, uri)
+			const key = getURI(state, diagnostics, term)
 			if (key in options) {
-				const { from, to } = uri
+				const { from, to } = term
 				const message = `Duplicate coproduct option key`
 				diagnostics.push({ from, to, message, severity: "error" })
 			}
@@ -329,13 +318,13 @@ function getType(
 			const expression = option.getChild("Expression")
 			options[key] =
 				expression === null
-					? { type: "unit" }
+					? APG.product({})
 					: getType(state, diagnostics, expression)
 		}
 
 		return { type: "coproduct", options }
 	} else {
-		return { type: "unit" }
+		throw new Error("Unexpected Expression node")
 	}
 }
 

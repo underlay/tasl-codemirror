@@ -1,6 +1,6 @@
 {
 	"name": "@underlay/tasl-codemirror",
-	"version": "1.3.3",
+	"version": "1.2.0",
 	"description": "",
 	"main": "lib/index.js",
 	"types": "lib/index.d.ts",
@@ -24,28 +24,29 @@
 	},
 	"homepage": "https://github.com/underlay/tasl-codemirror#readme",
 	"dependencies": {
-		"@underlay/apg": "^0.7.1",
 		"lezer-tree": "^0.13.0"
 	},
 	"devDependencies": {
 		"@babel/core": "^7.12.10",
 		"@babel/plugin-transform-modules-commonjs": "^7.12.1",
-		"@babel/preset-env": "^7.12.10",
+		"@babel/preset-env": "^7.12.11",
 		"@babel/preset-typescript": "^7.12.7",
 		"@codemirror/next": "^0.15.0",
-		"@types/jest": "^26.0.18",
-		"@underlay/tasl-lezer": "^0.2.7",
+		"@types/jest": "^26.0.19",
+		"@underlay/apg": "^0.8.0",
+		"@underlay/tasl-lezer": "^0.3.0",
 		"babel-loader": "^8.2.2",
 		"jest": "^26.6.3",
 		"n3.ts": "^0.2.1",
 		"source-map-loader": "^1.1.3",
-		"ts-loader": "^8.0.11",
-		"typescript": "^4.1.2",
-		"webpack": "^5.10.0",
+		"ts-loader": "^8.0.12",
+		"typescript": "^4.1.3",
+		"webpack": "^5.10.3",
 		"webpack-cli": "^4.2.0"
 	},
 	"peerDependencies": {
 		"@codemirror/next": "^0.15.0",
-		"@underlay/tasl-lezer": "^0.2.7"
+		"@underlay/apg": "^0.8.0",
+		"@underlay/tasl-lezer": "^0.3.0"
 	}
 }
