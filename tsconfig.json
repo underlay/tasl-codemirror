@@ -1,6 +1,6 @@
 {
 	"exclude": ["demo/*", "test/*"],
-	"include": ["src/*"],
+	"include": ["src/*", "src/*/*"],
 	"compilerOptions": {
 		"outDir": "lib",
 		"strict": true,

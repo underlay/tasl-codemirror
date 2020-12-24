@@ -3,7 +3,10 @@ const path = require("path")
 module.exports = {
 	devtool: "source-map",
 
-	entry: { index: path.resolve(__dirname, "demo", "index.js") },
+	entry: {
+		tasl: path.resolve(__dirname, "demo", "tasl.js"),
+		taslx: path.resolve(__dirname, "demo", "taslx.js"),
+	},
 
 	output: {
 		filename: "[name].min.js",

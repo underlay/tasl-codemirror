@@ -1,7 +1,7 @@
 import { openLintPanel } from "@codemirror/next/lint"
 import { EditorState } from "@codemirror/next/state"
 import { EditorView } from "@codemirror/next/view"
-import { editableConfig, makeSchemaLinter } from "../lib/index"
+import { editableConfig, makeLinter } from "../lib/taslx/index"
 
 const initialValue = `# Welcome to the schema editor!
 # If you're new, you probably want to read
@@ -11,21 +11,15 @@ const initialValue = `# Welcome to the schema editor!
 namespace ex http://example.com#
 namespace ul http://underlay.org/ns/
 
-type foo {
-  ex:a -> ? uri ;
-  ex:b -> string ;
-  ex:c -> dateTime ;
-}
+expr foo . ex:jskl | .ex:jklfs
 
-edge ex:cool ==/ ex:map /=> ex:wau
+map ex:jksl :: ex:jsl
+  | foo
+  | "jkfls" <ex:fjsl>
+  | / ex:99
+  | * ex:si99
+  | {ex:sjlk}
 
-class ex:cool unit
-
-class ex:wau {
-  ex:bar -> foo ;
-  ex:age -> integer ;
-  ex:self -> * ex:wau ;
-}
 
 
 
@@ -34,7 +28,7 @@ class ex:wau {
 
 `
 
-const linter = makeSchemaLinter()
+const linter = makeLinter()
 const extensions = [...editableConfig, linter]
 
 const state = EditorState.create({

@@ -13,7 +13,7 @@ import { lineNumbers } from "@codemirror/next/gutter"
 import { highlightSelectionMatches } from "@codemirror/next/highlight-selection"
 import { defaultHighlightStyle } from "@codemirror/next/highlight"
 
-import { schemaSyntax } from "./syntax.js"
+import { syntax } from "./syntax.js"
 
 export * from "@codemirror/next/state"
 
@@ -25,12 +25,12 @@ export const readOnlyConfig: Extension[] = [
 	lineNumbers(),
 	defaultHighlightStyle,
 	highlightSelectionMatches(),
-	schemaSyntax,
+	syntax,
 ]
 
 export const editableConfig: Extension[] = [
 	basicSetup,
-	schemaSyntax,
+	syntax,
 	keymap([
 		...defaultKeymap,
 		...commentKeymap,

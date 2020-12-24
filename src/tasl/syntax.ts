@@ -8,9 +8,9 @@ import {
 import { styleTags, tags } from "@codemirror/next/highlight"
 import { SyntaxNode } from "lezer-tree"
 
-import { parser } from "@underlay/tasl-lezer/grammar/index.js"
+import { parser } from "@underlay/tasl-lezer/grammar/tasl.js"
 
-export const schemaSyntax = LezerLanguage.define({
+export const syntax = LezerLanguage.define({
 	parser: parser.configure({
 		props: [
 			indentNodeProp.add({
@@ -30,15 +30,15 @@ export const schemaSyntax = LezerLanguage.define({
 				Prefix: tags.namespace,
 				TypeName: tags.typeName,
 				Variable: tags.typeName,
-				Uri: tags.name,
-				"Class/Uri": tags.className,
-				"Edge/Uri": tags.className,
-				Prop: tags.propertyName,
-				Iri: tags.string,
-				Unit: tags.literal,
+				Term: tags.name,
+				"Class/Term": tags.className,
+				"Edge/Term": tags.className,
+				"Product/Term": tags.propertyName,
+				"Coproduct/Term": tags.propertyName,
+				Uri: tags.string,
 				Literal: tags.string,
-				"Literal/Uri": tags.string,
-				"Reference/Uri": tags.className,
+				"Literal/Term": tags.string,
+				"Reference/Term": tags.className,
 				Pointer: tags.operator,
 				Optional: tags.operator,
 				"{ }": tags.bracket,

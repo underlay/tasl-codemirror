@@ -1,6 +1,6 @@
-export * from "./syntax.js"
-export * from "./lint.js"
-export * from "./config.js"
-export * from "./error.js"
+export * as tasl from "./tasl/index.js"
+export * as taslx from "./taslx/index.js"
 
+export { EditorView } from "@codemirror/next/view"
+export { EditorState } from "@codemirror/next/state"
 export { openLintPanel } from "@codemirror/next/lint"

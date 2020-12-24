@@ -24,13 +24,24 @@ export interface UpdateProps {
 	namespaces: Record<string, string>
 }
 
+interface parseState extends ParseState {
+	references: { from: number; to: number; key: string }[]
+	types: Record<string, APG.Type>
+	schema: Record<string, APG.Type>
+}
+
 export function lintView({
 	state,
 }: EditorView): UpdateProps & { diagnostics: Diagnostic[] } {
 	const cursor = syntaxTree(state).cursor()
 
-	const parseState: ParseState = {
-		slice: ({ from, to }) => state.doc.sliceString(from, to),
+	const slice = ({ from, to }: SyntaxNode) => state.doc.sliceString(from, to)
+	const error = (node: SyntaxNode, message: string) =>
+		new LintError(node.from, node.to, slice(node), message)
+
+	const parseState: parseState = {
+		slice,
+		error,
 		namespaces: {},
 		references: [],
 		types: { ...defaultTypes },
@@ -205,7 +216,7 @@ export function lintView({
 	}
 }
 
-export const makeSchemaLinter = (
+export const makeLinter = (
 	onChange?: (props: UpdateProps) => void
 ): Extension =>
 	linter((view: EditorView) => {
@@ -217,7 +228,7 @@ export const makeSchemaLinter = (
 	})
 
 function getURI(
-	state: ParseState,
+	state: parseState,
 	diagnostics: Diagnostic[],
 	node: SyntaxNode
 ): string {
@@ -236,7 +247,7 @@ function getURI(
 
 // Variable | Optional | Reference | Unit | Iri | Literal | Product | Coproduct
 function getType(
-	state: ParseState,
+	state: parseState,
 	diagnostics: Diagnostic[],
 	node: SyntaxNode
 ): APG.Type {

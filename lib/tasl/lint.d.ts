@@ -11,4 +11,4 @@ export interface UpdateProps {
 export declare function lintView({ state, }: EditorView): UpdateProps & {
     diagnostics: Diagnostic[];
 };
-export declare const makeSchemaLinter: (onChange?: ((props: UpdateProps) => void) | undefined) => Extension;
+export declare const makeLinter: (onChange?: ((props: UpdateProps) => void) | undefined) => Extension;
